@@ -7,6 +7,7 @@
 //import WebSocket from "ws"
 import http from "http"
 import { Server } from "socket.io"
+import { instrument } from "@socket.io/admin-ui"
 import express from "express"
 // express -> 프레임워크
 // express를 이용해서 백엔드 서버를 만들 수 있음
@@ -28,16 +29,53 @@ app.get("/", (_, res) => res.render("home"))
 app.get("/*", (_, res) => res.redirect("/")) // user가 어느페이지에 가더라도 home page로 돌려줌
 
 const httpServer = http.createServer(app);
-const wsServer = new Server(httpServer);
+const wsServer = new Server(httpServer, {
+    corS : {
+        origin : ["https://admin.socket.io"],
+        credentials : true,
+    },
+});
+
+instrument(wsServer, {
+    auth : false,
+})
+
+//{sids, rooms}안의 이름은 실제 이름과 같아야 함
+function publicRooms(){
+    const {sockets : {
+        adapter : {sids, rooms},
+        },
+    } = wsServer
+    let publicRooms = []
+    rooms.forEach((_, key) => {
+        if(sids.get(key) === undefined){
+            publicRooms.push(key)
+        }
+    })
+    console.log(publicRooms)
+    return publicRooms
+}
+
+function countRooms(roomName){
+    return wsServer.sockets.adapter.rooms.get(roomName)?.size
+}
 
 wsServer.on("connection", (socket) => {
+    wsServer.sockets.emit("room_change", publicRooms())
+    socket.onAny((event) => {
+        console.log(event)
+    })
     socket.on("enter_room", (roomName, done) => {
         socket.join(roomName)
         done()
-        socket.to(roomName).emit("welcome", socket.nickname)
+        socket.to(roomName).emit("welcome", socket.nickname, countRooms(roomName))
+        wsServer.sockets.emit("room_change", publicRooms())
     })
     socket.on("disconnecting", () => {
-        socket.rooms.forEach((room) => socket.to(room).emit("bye", socket.nickname))
+        socket.rooms.forEach((room) => socket.to(room).emit("bye", socket.nickname, countRooms(room)))
+    })
+    socket.on("disconnect", () => {
+        wsServer.sockets.emit("room_change", publicRooms())
     })
     socket.on("new_message", (msg, name, send) => {
         socket.to(name).emit("new_message", socket.nickname, msg)

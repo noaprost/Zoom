@@ -7,8 +7,13 @@ const welcome = document.querySelector("#welcome")
 const roomForm = welcome.querySelector("#roomname")
 const nickForm = welcome.querySelector("#nickname")
 const room = document.querySelector("#room")
+const openRoomsTxt = welcome.querySelector("h4")
+const openRoomList = welcome.querySelector("ul")
 
 room.hidden = true
+roomForm.hidden = true
+openRoomsTxt.hidden = true
+openRoomList.hidden = true
 
 let roomName
 let nickname
@@ -45,6 +50,10 @@ function onHandleNickSubmit(event){
     nickname = nickInput.value
     socket.emit("nickname", nickname)
     nickInput.value = ""
+    nickForm.hidden = true
+    roomForm.hidden = false
+    openRoomsTxt.hidden = false
+    openRoomList.hidden = false
 }
 
 function addMessage(message){
@@ -54,17 +63,33 @@ function addMessage(message){
     ul.appendChild(li)
 }
 
+function updateRoomTitle(roomName, newCount){
+    const roomNameTxt = room.querySelector("h3")
+    roomNameTxt.innerText = `Room ${roomName} (${newCount})`
+}
+
 roomForm.addEventListener("submit", onHandleRoomSubmit)
 nickForm.addEventListener("submit", onHandleNickSubmit)
 
-socket.on("welcome", (user) => {
+socket.on("welcome", (user, newCount) => {
     addMessage(`${user} joined this room!`)
+    updateRoomTitle(roomName, newCount)
 })
 
-socket.on("bye", (user) => {
+socket.on("bye", (user, newCount) => {
     addMessage(`${user} left this room T.T`)
+    updateRoomTitle(roomName, newCount)
 })
 
 socket.on("new_message", (nickname, msg) => {
     addMessage(`${nickname} : ${msg}`)
+})
+
+socket.on("room_change", (rooms) => {
+    openRoomList.innerHTML = ""
+    rooms.forEach((room) => {
+        const li = document.createElement("li")
+        li.innerText = room
+        openRoomList.appendChild(li)
+    });
 })
